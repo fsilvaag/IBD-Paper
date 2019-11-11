@@ -1,4 +1,4 @@
-fid1				iid1				fid2				iid2				chr					start_bp								end_bp		start_snp							end_snp	tot_snps								tract_len							unit				num_mismat						iid1_is_homoz			iid2_is_homoz
+fid1	iid1	fid2	iid2	chr	start_bp	end_bp	start_snp	end_snp	tot_snp	tract_len	unit	num_mismat	iid1_is_homoz	iid2_is_homoz
 -9	I205	-9	I205	1	54239	716859	S1_8210	S1_682730	31	0.663	MB	0	1	1
 -9	B93	-9	B93	1	54239	1023228	S1_8210	S1_992927	45	0.969	MB	0	1	1
 -9	B2	-9	B2	1	54239	1029556	S1_8210	S1_999255	48	0.975	MB	0	1	1
