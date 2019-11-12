@@ -1,0 +1,11 @@
+In this folder we can find the output tables and graphs created after running GERMLINE package (Gusev, et al., 2008).
+
+FILES:
+1) Kinship_matrix.csv = Matrix containing the kinship coefficients for the 118 inbred lines. Created as described in materials and methods section "Coefficient of inbreeding (Fi) and kinship coefficient (f¬ij)"
+2) Kinship_coefficients.csv = Values with which the Kinship_matrix.csv was filled (see R markdown for details
+3) Table3.csv = Table 3 of the paper with the number of IBD segments in <0.5Mb, 0.5-2.5Mb, 2.5-5Mb, and >5.0Mb
+4) Founders_BSSS_Kinship_matrix.csv = Kinship matrix for the founders of the Iowa Stiff Stalk Heterotic Group
+5) Supplemental File 1.Rmd = R script used to produce the files and tables here described
+
+
+Gusev, A., J.K. Lowe, M. Stoffel, M.J. Daly, D. Altshuler, J.L. Breslow, et al. 2008. Whole population, genome-wide mapping of hidden relatedness. Genome research 19: 318-326.
