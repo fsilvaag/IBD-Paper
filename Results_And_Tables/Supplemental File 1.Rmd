@@ -1,0 +1,361 @@
+---
+title: "Supplemental Paper IBD"
+author: "Fernando Silva Aguilar"
+date: "11/11/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Within Line Analysis
+##Importing Match files from github
+The data corresponds to the matches within lines (All_chrom.match) and between lines (All_Chrom_Between.match.gz).
+
+```{r}
+rm(list = ls())
+All_within <- read.delim("https://raw.githubusercontent.com/fsilvaag/IBD-Paper/master/Data/All_chrom.match", header = T) 
+```
+
+##Filter data by segments separated by less that 50 Kb
+Most of the code was taken from Sams and Boyko (2019).
+
+```{r}
+minimum_gap_size_kilobases = 50
+minimum_gap_size_basepairs = minimum_gap_size_kilobases*1000
+#IBD segment lenght in basepairs
+All_within$tract_len_bp <- (All_within$end_bp - All_within$start_bp)
+
+#Order data by chromosome, start and end position
+All_within <- All_within[order(All_within[,"chr"],All_within[,"start_bp"],All_within[,"end_bp"]),]
+
+#Shift the end position one cell down to find length between neighbour segments
+for (i in 2:nrow(All_within)) {
+  All_within$end_bp_shifted[1] <- 0
+  All_within$end_bp_shifted[i] <- All_within$end_bp[i-1]
+}
+
+#Distance between the start position and the end_pos_Shifted. This is to check the lengh of neighbour segments
+All_within$inter_track_distance <- All_within$end_bp_shifted - All_within$start_bp 
+All_within$is_large_gap <- ifelse(All_within$inter_track_distance > minimum_gap_size_basepairs,1,0)
+
+#Count number of segments that are less than 50 Kb
+sum(All_within$is_large_gap == 0)
+
+# There are 144/22120 segments that are less than 50Kb and that are going to be removed from the analysis.
+
+#Make a new shifted chromosome column to find distance between chromosomes in adjacent tracts, flag new chromosomes
+for (i in 2:nrow(All_within)) {
+  All_within$chr_shifted[1] <- 1
+  All_within$chr_shifted[i] <- All_within$chr[i-1]
+}
+
+All_within$is_new_chr <- All_within$chr - All_within$chr_shifted
+
+
+# make a column to group on by finding all places where there is a large
+#   gap or new chromosome
+All_within$is_start_of_new_group <- ifelse(All_within$is_large_gap + All_within$is_new_chr > 0,1,0) #the flag is when there's no change of chromosome and when the minimum_gap_distance_bp is less than 50 Kb (50000 bp)
+
+All_within_Subgroup <- subset(All_within, All_within$is_start_of_new_group > 0)
+
+```
+
+
+##Removing segments with less than 41 markers
+The file "**All_within_Subgroup**" corresponds to the file without the neighbour segments with a lengh less than 50Kb.
+
+```{r}
+minimum_number_of_markers = 41
+homozygosity_df <- subset(All_within_Subgroup, All_within_Subgroup$tot_snp > minimum_number_of_markers)
+homozygosity_df <- homozygosity_df[order(homozygosity_df[,"iid1"],homozygosity_df[,"iid2"]),]
+#Checking that the iid1 is equal to the iid2
+#homozygosity_df$identity <- ifelse(homozygosity_df$iid1 == homozygosity_df$iid2, 1,0)
+#unique(homozygosity_df$identity)
+```
+
+###Table 3. Number of IDB segments per inbred line
+
+```{r}
+library(tidyverse)
+#Identity of the 29 inbred lines for the analysis. SS: Stiff Stalk heterotic group. NSS: Non-stiff stalk heterotic group.
+IL <- matrix(c("3IIH6","NSS", "B14","SS", "CG120","SS", "CG123","NSS", "CG124","NSS", "LH123HT","NSS", "LH145","SS",
+"LH185","NSS", "LH195","SS", "LH198","SS", "LH210","NSS", "LH51","NSS", "PHB47","SS", "PHJ89","NSS", "PHK56","NSS",
+"PHN37","NSS", "PHN47","NSS", "PHN66","SS", "PHN82","NSS", "PHP38","SS", "PHR03","NSS", "PHR25","NSS", "PHR55","NSS",
+"PHR63","NSS", "PHRE1","SS", "PHW30","NSS", "PHW52","SS", "PHW53","NSS", "PHZ51","NSS","z_All","z_All"), nrow = 30, ncol = 2,byrow=T)
+colnames(IL) <- c("Inbred","HG")
+#ROH <-  as.matrix(c( sum(homozygosity_df$inter_track_distance <= 5e05),                  sum(homozygosity_df$inter_track_distance >= 5e05 & homozygosity_df$inter_track_distance < 2.5e06),                  sum(homozygosity_df$inter_track_distance >= 2.5e06 & homozygosity_df$inter_track_distance < 5e06),                 sum(homozygosity_df$inter_track_distance >= 5e06)))
+#rownames(ROH) <- c("<0.5Mb", "0.5-2.5Mb","2.5-5.0Mb",">5.0Mb")
+#ROH
+
+
+inb <- unique(homozygosity_df$iid1)
+F_inbred <- as.data.frame(matrix(NA, nrow = length(inb), ncol = 9))
+colnames(F_inbred) <- c("<0.5 Mb","0.5-2.5 Mb","2.5-5 Mb",">5 Mb","Marginal","0.5P","0.5-2.5P","2.5-5P","5P")
+for (i in 1:nrow(F_inbred)) {
+F_inbred[i,1] <- sum(subset(homozygosity_df, homozygosity_df$iid1 == inb[i])[,"inter_track_distance"] <= 5e05)
+F_inbred[i,2] <- sum(subset(homozygosity_df, homozygosity_df$iid1 == inb[i])[,"inter_track_distance"] > 5e05 &
+                       subset(homozygosity_df, homozygosity_df$iid1 == inb[i])[,"inter_track_distance"] <= 2.5e06)
+F_inbred[i,3] <- sum(subset(homozygosity_df, homozygosity_df$iid1 == inb[i])[,"inter_track_distance"] > 2.5e06 &
+                       subset(homozygosity_df, homozygosity_df$iid1 == inb[i])[,"inter_track_distance"] <= 5e06)
+F_inbred[i,4] <- sum(subset(homozygosity_df, homozygosity_df$iid1 == inb[i])[,"inter_track_distance"] > 5e06)
+F_inbred[i,5] <- F_inbred[i,1]+F_inbred[i,2]+F_inbred[i,3]+F_inbred[i,4]
+F_inbred[i,6] <- F_inbred[i,1]/F_inbred[i,5]
+F_inbred[i,7] <- F_inbred[i,2]/F_inbred[i,5]
+F_inbred[i,8] <- F_inbred[i,3]/F_inbred[i,5]
+F_inbred[i,9] <- F_inbred[i,4]/F_inbred[i,5]
+rownames(F_inbred)[i] <- c(paste0(inb[i]))
+}
+
+table3 <- F_inbred[rownames(F_inbred) %in% IL[,1],]
+table3 <- rbind(table3,apply(table3, 2, sum))
+
+table3 <- table3 %>% rownames_to_column(var="Inbred")
+table3[30,1] <- "z_All"
+table3 <- as.data.frame(merge(IL,table3, by="Inbred"))
+write.csv(table3,"C:/Users/fsilvaag/Box Sync/02. IBD/05. Analisis_Plink/05. Germline/Chrom_GBS_Data/Results/Table3.csv",quote =F )
+table3
+library(tidyr)
+library(ggplot2)
+HG <- c("SS","NSS")
+bar <- as.data.frame(matrix(NA, nrow = 2, ncol = 4))
+colnames(bar) <- colnames(table3)[8:11]
+for (i in 1:2) {
+bar[i,] <- apply(subset(table3,table3$HG == HG[i])[,-c(1:7)], 2, function(x){mean(x)*100})  
+rownames(bar)[i] <- c(paste0(HG[i]))
+
+}
+bar <- bar%>% rownames_to_column(var="HG")
+
+bar <- bar %>% gather(Vari, Percentge, c("0.5P","0.5-2.5P","2.5-5P","5P"))
+bar$Vari <- as.factor(bar$Vari)
+
+ggplot(bar,aes(x=Vari,y=Percentge, fill = HG))+geom_bar(stat = "identity", position = position_dodge()) + scale_x_discrete(name ="IBD Segment Length (Mb)",limits = c("0.5P","0.5-2.5P","2.5-5P","5P"),labels =c("0.5P" = "<0.5","0.5-2.5P"="0.5-2.5","2.5-5P"="2.5-5.0","5P"=">5.0") ) + theme_bw() + theme(panel.grid = element_blank(),panel.grid.major = element_blank(),panel.grid.minor = element_blank())
+
+```
+
+###Table . Length of IDB segments per inbred line
+
+```{r}
+inb <- unique(homozygosity_df$iid1)
+
+F_Length <- as.data.frame(matrix(NA, nrow = length(inb), ncol = 5))
+colnames(F_Length) <- c("<0.5 Mb","0.5-2.5 Mb","2.5-5 Mb",">5 Mb","Marginal")
+for (i in 1:nrow(F_Length)) {
+
+F_Length[i,1] <- (sum(subset(homozygosity_df, homozygosity_df$iid1 == inb[i] & homozygosity_df$inter_track_distance <= 5e05)$inter_track_distance)/1e06)/F_inbred[i,1]
+
+F_Length[i,2] <- (sum(subset(homozygosity_df, homozygosity_df$iid1 == inb[i] & homozygosity_df$inter_track_distance > 5e05 & homozygosity_df$inter_track_distance <= 2.5e06)$inter_track_distance)/1e06)/F_inbred[i,2]
+
+F_Length[i,3] <- (sum(subset(homozygosity_df, homozygosity_df$iid1 == inb[i] & homozygosity_df$inter_track_distance > 2.5e06 & homozygosity_df$inter_track_distance <= 5e06)$inter_track_distance)/1e06)/F_inbred[i,3]
+
+F_Length[i,4] <- (sum(subset(homozygosity_df, homozygosity_df$iid1 == inb[i] & homozygosity_df$inter_track_distance >= 5e06)$inter_track_distance)/1e06)/F_inbred[i,4]
+
+F_Length[i,5] <- F_Length[i,1]+F_Length[i,2]+F_Length[i,3]+F_Length[i,4]
+rownames(F_Length)[i] <- c(paste0(inb[i]))
+
+}
+
+F_Length <- as.data.frame(F_Length)
+
+graph1 <- F_Length[rownames(F_Length) %in% IL[,1],]
+
+graph1 <- rbind(graph1,apply(graph1, 2, sum))
+graph1 <- graph1 %>% rownames_to_column(var="Inbred")
+graph1[30,1] <- "z_All"
+graph1 <- as.data.frame(merge(IL,graph1, by="Inbred"))
+
+
+
+
+#graph1_1 <- merge(table3[,-7] %>% gather(Var, Number_ROH, c("<0.5 Mb","0.5-2.5 Mb","2.5-5 Mb",">5 Mb")),graph1 %>% gather(Var, Length_ROH, c("<0.5 Mb","0.5-2.5 Mb","2.5-5 Mb",">5 Mb")), by = c("Inbred","HG","Var"))
+
+graph1_1 <- merge(table3,graph1,by = c("Inbred","HG"))
+graph1_1 <- graph1_1[,c("Inbred","HG","Marginal.x","Marginal.y")]
+graph1_1 <- graph1_1[order(graph1_1[,"Inbred"],graph1_1[,"HG"]),]
+
+library(ggplot2)
+
+ggplot(subset(graph1_1,graph1_1$HG == "SS"), aes(x=Marginal.y,y =Marginal.x )) +geom_point() + theme_bw() + theme(panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.title = element_text(hjust = 0.5, size=15.5, face = 'bold'), axis.title = element_text(face = 'bold'))+ xlab("Avergae Lenght of IBD segments (Mb)") + ylab(label = "Number of IBD Segments") + geom_vline(xintercept = c(0.5,2.5,5), linetype="dotted",color = "gray", size=1) + ggtitle("Stiff Stalk Heterotic Group (SS)")
+
+
+
+#ggplot(subset(graph1_1,graph1_1$HG == "SS"), aes(x=Length_ROH,y =Number_ROH )) +geom_point() + theme_bw() + theme(panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.title = element_text(hjust = 0.5, size=15.5, face = 'bold'), axis.title = element_text(face = 'bold'))+ xlab("Avergae Lenght of IBD segments (Mb)") + ylab(label = "Number of IBD Segments") + geom_vline(xintercept = c(0.5,2.5,5), linetype="dotted",color = "gray", size=1) + ggtitle("Stiff Stalk Heterotic Group (SS)")
+
+#ggplot(subset(graph1_1,graph1_1$HG == "NSS"), aes(x=Length_ROH,y =Number_ROH )) +geom_point() + theme_bw() + theme(panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.title = element_text(hjust = 0.5, size=15.5, face = 'bold'), axis.title = element_text(face = 'bold'))+ xlab("Avergae Lenght of IBD segments (Mb)") + ylab(label = "Number of IBD Segments") + geom_vline(xintercept = c(0.5,2.5,5), linetype="dotted",color = "gray", size=1) + ggtitle("Non Stiff Stalk Heterotic Group (NSS)")
+
+```
+
+##Coefficient of Inbreeding
+
+```{r}
+#Covered lenght (with the 313803 markers) in basepairs for each chromosome (C)
+C1 = 306909421 - 54239
+C2 = 244412253 - 40552
+C3 = 235520297 - 68905
+C4 = 246780753 - 217129
+C5 = 223657511 - 120369
+C6 = 173377286 - 169964
+C7 = 182205401 - 68941
+C8 = 181045919 - 177643
+C9 = 159668042 - 61252
+C10 =150847940 - 128653
+
+Length_basepairs = C1+C2+C3+C4+C5+C6+C7+C8+C9+C10
+Total_length_MegaBases <- Length_basepairs/1e6
+
+F_coeff <- aggregate(homozygosity_df$tract_len_bp, by = list(Iid1 = homozygosity_df$iid1,Iid2= homozygosity_df$iid2), FUN = sum)
+
+F_coeff$f <- F_coeff$x/Length_basepairs
+
+colnames(F_coeff)[3] <- "ROH_Length_bp"
+```
+
+
+
+
+
+# Between Lines Analysis
+##Importing .match data 
+```{r}
+library(vroom)
+All_between <- vroom("https://raw.githubusercontent.com/fsilvaag/IBD-Paper/master/Data/All_Chrom_Between.match.gz")
+All_between <- as.data.frame(All_between)
+```
+
+
+```{r}
+minimum_gap_size_kilobases = 50 #Modify with the LD decay analysis
+minimum_gap_size_basepairs = minimum_gap_size_kilobases * 1000
+minimum_number_of_markers = 41
+
+#minimum_gap_distance_MB = 0.5
+
+All_between$tract_len_bp <- (All_between$end_bp - All_between$start_bp)
+
+#Order data by chromosome, start and end position
+All_between <- All_between[order(All_between[,"chr"],All_between[,"start_bp"],All_between[,"end_bp"]),]
+
+#Shift the end position one cell down to find length between neighbour autozygous segments
+a <- c(0)
+end_bp_shifted <- as.data.frame(All_between$end_bp)
+end_bp_shifted <- rbind(a,end_bp_shifted)
+end_bp_shifted <- end_bp_shifted[-4159323,]
+All_between$end_bp_shifted <- end_bp_shifted
+
+#Distance between the start position and the end_pos_Shifted. This is to check the lengh of neighbour segments
+All_between$inter_track_distance <-  All_between$end_bp_shifted - All_between$start_bp
+All_between$is_large_gap <- ifelse(All_between$inter_track_distance > minimum_gap_size_basepairs,1,0)
+
+#Count number of segments that are less than 50 Kb
+sum(All_between$is_large_gap == 0)
+# There are 44/4159322 matches  are less than 50Kb and that are going to be removed from the analysis.
+
+
+#Make a new shifted chromosome column to find distance between chromosomes in adjacent tracts, flag new chromosomes
+
+a <- 1
+chr_shifted <- as.data.frame(All_between$chr)
+chr_shifted <- rbind(a,chr_shifted)
+chr_shifted <- chr_shifted[-4159323,1]
+All_between$chr_shifted <- chr_shifted
+
+All_between$is_new_chr <- All_between$chr - All_between$chr_shifted
+
+
+# make a column to group on by finding all places where there is a large
+#   gap or new chromosome
+All_between$is_start_of_new_group <- ifelse(All_between$is_large_gap + All_between$is_new_chr > 0,1,0) #the flag is when there's no change of chromosome and when the minimum_gap_distance_bp is less than 0.5 Mb (500000 bp)
+
+Mtract_Subgroup_df <- subset(All_between, All_between$is_start_of_new_group > 0)
+
+Mhomozygosity_df <- subset(Mtract_Subgroup_df,Mtract_Subgroup_df$tot_snp > minimum_number_of_markers)
+#There were 1224834/4159322 segments that include less than 41 markers
+
+#Mhomozygosity_df <- Mhomozygosity_df[order(Mhomozygosity_df[,"iid1"],Mhomozygosity_df[,"iid2"],Mhomozygosity_df[,"start_bp"]),]
+```
+
+
+###IBD Segments per chromosome and Percentage Markers discarded
+
+```{r}
+matches_per_chromosome <- matrix(NA, nrow = 10, ncol = 4)
+for (i in 1:10) {
+matches_per_chromosome[i,1] <- sum(Mhomozygosity_df$chr == i)  
+matches_per_chromosome[i,2] <- sum(All_between$chr == i) 
+matches_per_chromosome[i,3] <- matches_per_chromosome[i,2]-matches_per_chromosome[i,1]
+matches_per_chromosome[i,4] <- round((matches_per_chromosome[i,3]/matches_per_chromosome[i,2])*100,1)
+
+}
+colnames(matches_per_chromosome) <- c("Final_ROH","Initial_ROH","Discarded","Percent_Discarded")
+matches_per_chromosome
+
+```
+
+
+```{r}
+library(tidyverse)
+#Covered lenght (with the 313803 markers) in basepairs for each chromosome (C)
+C1 = 306909421 - 54239
+C2 = 244412253 - 40552
+C3 = 235520297 - 68905
+C4 = 246780753 - 217129
+C5 = 223657511 - 120369
+C6 = 173377286 - 169964
+C7 = 182205401 - 68941
+C8 = 181045919 - 177643
+C9 = 159668042 - 61252
+C10 =150847940 - 128653
+CALL <- rbind(C1/1e06,C2/1e06,C3/1e06,C4/1e06,C5/1e06,C6/1e06,C7/1e06,C8/1e06,C9/1e06,C10/1e06)
+Length_basepairs = C1+C2+C3+C4+C5+C6+C7+C8+C9+C10
+Total_length_MegaBases <- Length_basepairs/1e6
+
+s <- Sys.time()
+kinship <- aggregate(Mhomozygosity_df$tract_len_bp, by = list(Iid1 = Mhomozygosity_df$iid1,Iid2= Mhomozygosity_df$iid2), FUN = sum)
+
+kinship$f = kinship$x/Length_basepairs
+colnames(kinship)[3] <- "ROH_Length_bp"
+e <- Sys.time()
+e-s
+
+s <- Sys.time()
+kinship_per_Chrom <- aggregate(Mhomozygosity_df$tract_len_bp, by = list(Iid2 = Mhomozygosity_df$iid2,Iid1= Mhomozygosity_df$iid1, Chrom = Mhomozygosity_df$chr), FUN = sum)
+e <- Sys.time()
+e-s
+```
+
+
+```{r}
+#The matrix Kinship is the upper triangule and kinship1 is the lower triangule
+kinship1 <- kinship[,c(2,1,3,4)]
+colnames(kinship1) <- colnames(kinship)
+
+#Coefficients
+co <- rbind(kinship,kinship1,F_coeff)
+co <- co[,-3]
+co <- co[order(co[,"Iid1"],co[,"Iid2"]),]
+#write.csv(co,"C:/Users/fsilvaag/Box Sync/02. IBD/05. Analisis_Plink/05. Germline/Chrom_GBS_Data/Results/Kinship_coefficients.csv",quote =F , row.names = F)
+
+kinship_matrix <- reshape(co, timevar = "Iid2", idvar = "Iid1", direction = "wide")
+
+#write.csv(kinship_matrix,"C:/Users/fsilvaag/Box Sync/02. IBD/05. Analisis_Plink/05. Germline/Chrom_GBS_Data/Results/Kinship_matrix.csv",quote =F , row.names = F)
+```
+
+###Relationship between BSSS founders
+
+```{r}
+founders <- c("A3G313","CI18722","CI540","B2","FE","I159","OS420","WD456","Ill.Hy","AH83","Tr")
+founders_col <- c("Iid1",    "f.A3G313","f.CI18722","f.CI540", "f.B2",    "f.FE",  "f.I159",  "f.OS420", "f.WD456",
+                  "f.Ill.Hy","f.AH83",  "f.Tr")
+FOUNDERS_kinship_matrix <- kinship_matrix[,names(kinship_matrix) %in% founders_col ]
+FOUNDERS_kinship_matrix <- FOUNDERS_kinship_matrix[FOUNDERS_kinship_matrix$Iid1 %in% founders,]
+
+#write.csv(FOUNDERS_kinship_matrix,"C:/Users/fsilvaag/Box Sync/02. IBD/05. Analisis_Plink/05. Germline/Chrom_GBS_Data/Results/Founders_BSSS_Kinship_matrix.csv",quote =F , row.names = F)
+```
+
+
+
+
+#References
+Sams, A. J. and A. R. Boyko (2019). "Fine-scale resolution of runs of homozygosity reveal patterns of inbreeding and substantial overlap with recessive disease genotypes in domestic dogs." G3: Genes, Genomes, Genetics 9(1): 117-123.
