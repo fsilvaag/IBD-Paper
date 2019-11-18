@@ -4,7 +4,7 @@ Files:
 
 1) All_chrom.match = File created after merging the matches for each chromosome within lines (as described in the materials and methods). This file contains the informations of IBD segmentsfor each Inbred line. The fie contains header and 22120 matches for the 118 Inbred lines.
 
-2) All_Chrom_Between.match.gz = File created after merging the matches for each chromosome in the between inbred lines analyisis (as described in the materials and methods). This file contains the informations of IBD segmentsfor shared between Inbred line. The fie contains header and 4159322 matches for the 118 Inbred lines.
+2) All_Chrom_Between.match.gz = File created after merging the matches for each chromosome in the between inbred lines analyisis (as described in the materials and methods). This file contains the informations of IBD segmentsfor shared between Inbred line. The fie contains header and 36466837 matches for the 118 Inbred lines.
 
 column headers for both files are as described in GERMLINE package (http://gusevlab.org/projects/germline/usage.html)
 
