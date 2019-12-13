@@ -1,0 +1,124 @@
+Created on 12/13/2019
+Here we describe the code to produce the Mhomozigosity_df and Matriz_IBD_cM databases:
+
+STEPS:
+1) Create the "All_Chrom_Between.txt", by concatenating the output from Germline for each chromosome:
+$ cat Germline_Anal_between_*.match > All_Chrom_Between1.txt  ## This correspond to the output from germline (files not provided)
+# Change delimiter to be tab (\t)
+$ sed 's/ /\t/g' All_Chrom_Between1.txt > All_Chrom_Between.txt
+
+# Remove intermediate file:
+rm All_Chrom_Between1.txt
+
+2) Sort the data based on the chromosome ("chr"), start position ("start_bp"), and end position ("end_bp")
+$ cat All_Chrom_Between.txt | sort -k5,5n -k6,6n -k7,7n | gzip > All_Chrom_Between.txt.gz
+
+# The sorting is based on the columns 5, 6, and 7, and it is done based on a numeric formated column.
+
+3) Create a new column with the end position (end_bp) shifted one column below.
+$ zcat All_Chrom_Between.txt.gz | awk '{tmp = $7; $16 = prev; prev = tmp; print}' > end_shifted.txt
+
+# The output does have header and the first element of the column 16 is in blank. Then:
+$ head -2 end_shifted.txt > a
+$ nano a
+  --> go to the last element of first row and after a tab type "end_bp_shifted".
+  --> go to the last element of second row and after a tab type zero (0)
+$ tail -n +3 end_shifted.txt > end_shifted1.txt
+$ cat a end_shifted1.txt > All_Chrom_Between_endbpShifted.txt
+$ rm a end_shifted.txt end_shifted1.txt
+
+4) Create a new column with the chromosome shifted to find the start of a new position.
+$ cat All_Chrom_Between_endbpShifted.txt | awk '{tmp = $5; $17 = prev; prev = tmp; print}' > end_chrom_shifted.txt
+
+# The output does have header and the first element of the column 17 is in blank. Then:
+$ head -2 end_chrom_shifted.txt > a
+$ nano a
+  --> go to the last element of first row and after a tab type "chr_shifted".
+  --> go to the last element of second row and after a tab type one (1)
+$ tail -n +3 end_chrom_shifted.txt > end_shifted1.txt
+$ cat a end_shifted1.txt > All_Chrom_Between_endbpShifted_chrShifted.txt
+$ rm a end_chrom_shifted.txt end_shifted1.txt All_Chrom_Between_endbpShifted.txt
+
+5) create the inter matches distance as the diffrenece between the end_bp_shifted (column 16) and the start_bp (column 6)
+$ awk '{a=$16-$6;print $0,a;}' All_Chrom_Between_endbpShifted_chrShifted.txt > s.txt
+
+$ head -2 s.txt > a
+$ nano a
+  --> go to the last element of first row and after a tab type "gap".
+  --> go to the last element of second row and remove negative sign (-)
+$ tail -n +2 s.txt > end_shifted1.txt
+$ cat a end_shifted1.txt > s.txt
+$ rm a end_chrom_shifted.txt end_shifted1.txt All_Chrom_Between_endbpShifted.txt All_Chrom_Between_endbpShifted_chrShifted.txt
+
+
+6) create a column identifying if the inter_tract_len is bigger than 50 kb (50000)
+$ awk 'BEGIN {OFS="\t"}; {if($18 > 50000) print 1; else print 0}' s.txt > is_large_gap.txt
+# Change header of is_large_gap.txt
+$ head -1 is_large_gap.txt > a
+$ nano a 
+  --> change the unique element to "is_large_gap"
+$ tail -n +2 is_large_gap.txt > l.txt
+$ cat a l.txt > is_large_gap.txt
+$ paste s.txt is_large_gap.txt > s1.txt
+
+7) create the flag for the new chromosome as the difference chr (column 5) and the chr_shifted (column 17)
+$ awk '{a=$5-$17;print $0,a;}' s.txt > flag.txt
+$ head -1 flag.txt > a
+$ nano a
+  --> change the last element of a to "is_new_chr"
+$ tail -n +2 flag.txt > b
+$ cat a b > flag.txt
+$ rm a end_chrom_shifted.txt end_shifted1.txt All_Chrom_Between_endbpShifted.txt All_Chrom_Between_endbpShifted_chrShifted.txt s.txt b l.txt
+
+8) create a column (new_group) as the sum of "is_large_gap" and "is_new_chr"
+$ awk '{a=$19+$20;print $0,a;}' flag.txt > flag1.txt
+$ head -1 flag1.txt > a
+$ nano a 
+  --> change the columna name to be "is_new_chr_flag"
+$ tail -n +2 flag.txt > b
+$ cat a b > flag1.txt
+
+$ rm a end_chrom_shifted.txt end_shifted1.txt All_Chrom_Between_endbpShifted.txt All_Chrom_Between_endbpShifted_chrShifted.txt s.txt b l.txt flag.txt
+
+9) Filter the dataset based on large gaps (> 50Kb):
+$ awk '{ if ($21 > 0) {print } }' flag1.txt > All_tract.txt &
+# Column 21 corresponds to the flag due to gap > 50kb and new chromosome gap. We remove at the end 2662 segments
+$ rm flag1.txt
+
+11) Filter based on a sliding window of 51 SNPs (see materials and methods to know why the 51)
+$ awk '{ if ($10 > 51) {print } }' All_tract.txt > Mhomozygosity_df.txt
+	--> Column 10 corresponds to "tot_snp" in the match. We remove 31'535.410
+$ rm All_tract.txt
+
+12) Sort the data by iid1 and iid2 
+$ tail -n +2 Mhomozygosity_df.txt | sort -k2 -k4 > sorted.txt
+$ head -1 Mhomozygosity_df.txt > a
+$ cat a sorted.txt > Mhomozygosity_df.txt
+$ rm All_tract.txt 
+
+https://unix.stackexchange.com/questions/74514/moving-columns-across-rows
+
+
+Including cM position:
+
+13) Include the start position in cM based on the "markers_cM_converted.csv" (See Supplemental file 1.rmd to details) and the Mhomozygosity_df.txt, by SNP name:
+$ awk 'NR==FNR{A[$1]=$4;next}$8 in A{$22=A[$8]}1' markers_cM_converted.txt ../../Between/postanalysis/Mhomozygosity_df.txt > a.txt
+$ head -1 a.txt > hea       #Extract the header
+$ nano hea --> include manually the header "start_cM"
+$ tail -n +2 a.txt > v.txt #Extract the file without header
+$ cat hea v.txt | sed 's/ /\t/g' > Base.txt      #Concatenate the header (hea) with the rest of the file (v.txt) and replace the white space ( ) by a tab separator (\t)
+
+14) Include the end position in cM based on the "markers_cM_converted.csv" (See Supplemental file 1.rmd to details) and the Base.txt recently created file, by SNP name:
+$ awk 'NR==FNR{A[$1]=$4;next}$9 in A{$23=A[$9]}1' markers_cM_converted.txt Base.txt > a.txt
+$ head -1 a.txt > hea       #Extract the header
+$ nano hea --> include manually the header "end_cM"
+$ tail -n +2 a.txt > v.txt #Extract the file without header
+$ cat hea v.txt | sed 's/ /\t/g' | sed 's/\r//g' > Base_con_start_end_cM.txt      #Concatenate the header (hea) with the rest of the file (v.txt) and replace the white space ( ) by a tab separator (\t)
+                                                                                  #For some reason the awk function is including at the end of start_cM and end_cM the character "\r", and for that we use the second sed
+
+15) Create a column with the istance of each match in cM (end_cM - start_cM):
+$ awk '{a=$23-$22;print $0,a;}' Base_con_start_end_cM.txt | sed 's/ /\t/g' > a.txt
+$ head -1 a.txt > hea       #Extract the header
+$ nano hea --> include manually the header "tract_len_cM"
+$ tail -n +2 a.txt > v.txt #Extract the file without header
+$ cat hea v.txt | gzip > Matriz_IBD_cM.txt.gz
