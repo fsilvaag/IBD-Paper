@@ -7,3 +7,4 @@ FILES:
 1) All_Between.txt.gz = Raw data after running GERMLINE algorithm for the contrast between inbred lines.
 2) All_Within.txt = Raw data after running GERMLINE algorithm for the contrast within inbred lines.
 3) Mhomozygosity_df.txt.gz = Data after the remotion of ROH with < 51 SNPs, and neighbor ROH with distance < 50 Kb. This file was created as shown in the postanalysis README file.
+4) Matriz_IBD_cM.txt.gz = Data after the remotion of ROH with < 51 SNPs, and neighbor ROH with distance < 50 Kb, and with the start, and end position in cM.
